@@ -18,6 +18,7 @@
  * under the License.
  *
  */
+/* global cordova */
 
 exports.defineAutoTests = function () {
     var isLockable = false;
@@ -122,22 +123,72 @@ exports.defineAutoTests = function () {
     // test addEventListener('change') works
     // test onchange works
     describe('window.screen.orientation', function () {
+        describe('promise callback contract', function () {
+            var originalExec;
+
+            beforeEach(function () {
+                originalExec = cordova.exec;
+            });
+
+            afterEach(function () {
+                cordova.exec = originalExec;
+            });
+
+            it('should resolve lock when native success callback is invoked', function () {
+                spyOn(cordova, 'exec').and.callFake(function (success) {
+                    success();
+                });
+
+                return window.screen.orientation.lock('portrait-primary').then(function () {
+                    expect(cordova.exec).toHaveBeenCalled();
+                });
+            });
+
+            it('should reject lock when native error callback is invoked', function () {
+                spyOn(cordova, 'exec').and.callFake(function (success, fail) {
+                    fail('Unknown orientation value');
+                });
+
+                return window.screen.orientation.lock('portrait-primary').then(function () {
+                    fail('Expected native failure to reject lock promise.');
+                }, function (error) {
+                    expect(error).toBeDefined();
+                    expect(error.name).toBe('NotSupportedError');
+                });
+            });
+
+            it('should resolve unlock when native success callback is invoked', function () {
+                spyOn(cordova, 'exec').and.callFake(function (success) {
+                    success();
+                });
+
+                return window.screen.orientation.unlock().then(function () {
+                    expect(cordova.exec).toHaveBeenCalled();
+                });
+            });
+        });
+
+        it('should reject invalid orientations', function () {
+            return window.screen.orientation.lock('not-a-valid-orientation').then(function () {
+                fail('Expected lock to reject invalid orientation value.');
+            }, function (error) {
+                expect(error).toBeDefined();
+                expect(error.name).toBe('NotSupportedError');
+            });
+        });
+
         if (isLockable) {
             it('should successfully lock and unlock screen orientation', function () {
                 return window.screen.orientation.lock('portrait').then(function () {
                     expect(window.screen.orientation.type).toMatch(/^portrait-/);
-                    expect(window.screen.orientation.unlock).not.toThrow();
+                    var unlockResult = window.screen.orientation.unlock();
+                    expect(unlockResult).toBeDefined();
+                    expect(typeof unlockResult.then).toBe('function');
+                    return unlockResult;
                 });
             });
         }
         // We do not test "not isLockable" states because it isn't testable.
-        // The error stating it's not supported is not actually passed to the
-        // promise reject function, so the error is not catchable. The error
-        // is only ever printed to the JS console if nothing catches errors.
-        // The promise itself is fulfilled successfully, despite the action
-        // not doing what is expected.
-        // I believe this might be a privacy security mechanism to avoid device
-        // fingerprinting.
     });
 };
 exports.defineManualTests = function (contentEl, createActionButton) {

@@ -25,7 +25,6 @@ import org.apache.cordova.CallbackContext;
 import org.apache.cordova.CordovaPlugin;
 
 import org.json.JSONArray;
-import org.json.JSONException;
 
 import android.app.Activity;
 import android.content.pm.ActivityInfo;
@@ -63,36 +62,36 @@ public class CDVOrientation extends CordovaPlugin {
     }
     
     private boolean routeScreenOrientation(JSONArray args, CallbackContext callbackContext) {
-        
-        String action = args.optString(0);
-        
-        
-        
-        String orientation = args.optString(1);
+        final String orientation = args.optString(0, "");
         
         Log.d(TAG, "Requested ScreenOrientation: " + orientation);
         
-        Activity activity = cordova.getActivity();
-        
+        final int requestedOrientation;
         if (orientation.equals(ANY)) {
-            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
         } else if (orientation.equals(LANDSCAPE_PRIMARY)) {
-            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
         } else if (orientation.equals(PORTRAIT_PRIMARY)) {
-            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
         } else if (orientation.equals(LANDSCAPE)) {
-            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
         } else if (orientation.equals(PORTRAIT)) {
-            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT;
         } else if (orientation.equals(LANDSCAPE_SECONDARY)) {
-            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE);
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE;
         } else if (orientation.equals(PORTRAIT_SECONDARY)) {
-            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT);
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT;
+        } else {
+            callbackContext.error("Unknown orientation value");
+            return true;
         }
-        
-        callbackContext.success();
+
+        final Activity activity = cordova.getActivity();
+        activity.runOnUiThread(() -> {
+            activity.setRequestedOrientation(requestedOrientation);
+            callbackContext.success();
+        });
+
         return true;
-        
-        
     }
 }

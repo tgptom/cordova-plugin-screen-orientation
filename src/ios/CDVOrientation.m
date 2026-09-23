@@ -23,140 +23,241 @@
 #import <Cordova/CDVViewController.h>
 #import <objc/message.h>
 
+static NSString *const kUnknownOrientationValueError = @"Unknown orientation value";
+static NSString *const kMissingWindowSceneError = @"Unable to determine active UIWindowScene";
+
 @interface CDVOrientation () {}
 @end
 
 @implementation CDVOrientation
 
-
--(void)handleBelowEqualIos15WithOrientationMask:(NSInteger) orientationMask viewController: (CDVViewController*) vc result:(NSMutableArray*) result selector:(SEL) selector
+- (void)pluginInitialize
 {
-    NSValue *value;
-    if (orientationMask != 15) {
-        if (!_isLocked) {
-            _lastOrientation = [UIApplication sharedApplication].statusBarOrientation;
-        }
-        UIInterfaceOrientation deviceOrientation = [UIApplication sharedApplication].statusBarOrientation;
-        if(orientationMask == 8  || (orientationMask == 12  && !UIInterfaceOrientationIsLandscape(deviceOrientation))) {
-            value = [NSNumber numberWithInt:UIInterfaceOrientationLandscapeLeft];
-        } else if (orientationMask == 4){
-            value = [NSNumber numberWithInt:UIInterfaceOrientationLandscapeRight];
-        } else if (orientationMask == 1 || (orientationMask == 3 && !UIInterfaceOrientationIsPortrait(deviceOrientation))) {
-            value = [NSNumber numberWithInt:UIInterfaceOrientationPortrait];
-        } else if (orientationMask == 2) {
-            value = [NSNumber numberWithInt:UIInterfaceOrientationPortraitUpsideDown];
-        }
-    } else {
-        if (_lastOrientation != UIInterfaceOrientationUnknown) {
-            [[UIDevice currentDevice] setValue:[NSNumber numberWithInt:_lastOrientation] forKey:@"orientation"];
-            ((void (*)(CDVViewController*, SEL, NSMutableArray*))objc_msgSend)(vc,selector,result);
-            [UINavigationController attemptRotationToDeviceOrientation];
-        }
-    }
-    if (value != nil) {
-        _isLocked = true;
-        [[UIDevice currentDevice] setValue:value forKey:@"orientation"];
-    } else {
-        _isLocked = false;
-    }
+    _supportedOrientationMask = UIInterfaceOrientationMaskAll;
+    _lastOrientation = UIInterfaceOrientationUnknown;
+    [self registerScreenOrientationDelegate];
 }
 
-#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 160000
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunguarded-availability-new"
-// this will stop it complaining about new iOS16 APIs being used.
--(void)handleAboveEqualIos16WithOrientationMask:(NSInteger) orientationMask viewController: (CDVViewController*) vc result:(NSMutableArray*) result selector:(SEL) selector
+- (BOOL)shouldAutorotate
 {
-    NSObject *value;
-    // oritentationMask 15 is "unlock" the orientation lock.
-    if (orientationMask != 15) {
-        if (!_isLocked) {
-            _lastOrientation = [UIApplication sharedApplication].statusBarOrientation;
-        }
-        UIInterfaceOrientation deviceOrientation = [UIApplication sharedApplication].statusBarOrientation;
-        if(orientationMask == 8  || (orientationMask == 12  && !UIInterfaceOrientationIsLandscape(deviceOrientation))) {
-            value = [[UIWindowSceneGeometryPreferencesIOS alloc] initWithInterfaceOrientations:UIInterfaceOrientationMaskLandscapeLeft];
-        } else if (orientationMask == 4){
-            value = [[UIWindowSceneGeometryPreferencesIOS alloc] initWithInterfaceOrientations:UIInterfaceOrientationMaskLandscapeRight];
-        } else if (orientationMask == 1 || (orientationMask == 3 && !UIInterfaceOrientationIsPortrait(deviceOrientation))) {
-            value = [[UIWindowSceneGeometryPreferencesIOS alloc] initWithInterfaceOrientations:UIInterfaceOrientationMaskPortrait];
-        } else if (orientationMask == 2) {
-            value = [[UIWindowSceneGeometryPreferencesIOS alloc] initWithInterfaceOrientations:UIInterfaceOrientationMaskPortraitUpsideDown];
-        }
-    } else {
-        ((void (*)(CDVViewController*, SEL, NSMutableArray*))objc_msgSend)(vc,selector,result);
-    }
-    if (value != nil) {
-        _isLocked = true;
-        UIWindowScene *scene = (UIWindowScene*)[[UIApplication.sharedApplication connectedScenes] anyObject];
-        [scene requestGeometryUpdateWithPreferences:(UIWindowSceneGeometryPreferencesIOS*)value errorHandler:^(NSError * _Nonnull error) {
-            NSLog(@"Failed to change orientation  %@ %@", error, [error userInfo]);
-        }];
-    } else {
-        _isLocked = false;
-    }
+    return YES;
 }
-#pragma clang diagnostic pop
 
--(void)handleWithOrientationMask:(NSInteger) orientationMask viewController: (CDVViewController*) vc result:(NSMutableArray*) result selector:(SEL) selector
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations
 {
+    return _supportedOrientationMask;
+}
+
+- (void)screenOrientation:(CDVInvokedUrlCommand *)command
+{
+    NSString *orientation = [command argumentAtIndex:0 withDefault:nil andClass:[NSString class]];
+    UIInterfaceOrientationMask orientationMask = [self orientationMaskForValue:orientation];
+
+    if (orientationMask == 0) {
+        [self sendPluginError:kUnknownOrientationValueError callbackId:command.callbackId];
+        return;
+    }
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self applyOrientationMask:orientationMask callbackId:command.callbackId];
+    });
+}
+
+- (void)applyOrientationMask:(UIInterfaceOrientationMask)orientationMask callbackId:(NSString *)callbackId
+{
+    _supportedOrientationMask = orientationMask;
+    [self registerScreenOrientationDelegate];
+    [self updateLegacySupportedOrientations];
+
     if (@available(iOS 16.0, *)) {
-        [self handleAboveEqualIos16WithOrientationMask:orientationMask viewController:vc result:result selector:selector];
-        // always double check the supported interfaces, so we update if needed
-        // but do it right at the end here to avoid the "double" rotation issue reported in
-        // https://github.com/apache/cordova-plugin-screen-orientation/pull/107
-        [self.viewController setNeedsUpdateOfSupportedInterfaceOrientations];
-    } else {
-        [self handleBelowEqualIos15WithOrientationMask:orientationMask viewController:vc result:result selector:selector];
+        [self applyOrientationMaskOnIOS16:orientationMask callbackId:callbackId];
+        return;
     }
 
+    [self applyOrientationMaskOnIOS15AndBelow:orientationMask];
+    [self sendPluginSuccess:callbackId];
 }
-#else
--(void)handleWithOrientationMask:(NSInteger) orientationMask viewController: (CDVViewController*) vc result:(NSMutableArray*) result selector:(SEL) selector
+
+- (void)applyOrientationMaskOnIOS15AndBelow:(UIInterfaceOrientationMask)orientationMask
 {
-    [self handleBelowEqualIos15WithOrientationMask:orientationMask viewController:vc result:result selector:selector];
+    UIInterfaceOrientation currentOrientation = [self currentInterfaceOrientation];
+
+    if (orientationMask != UIInterfaceOrientationMaskAll && !_isLocked) {
+        _lastOrientation = currentOrientation;
+    }
+
+    UIInterfaceOrientation targetOrientation = [self targetInterfaceOrientationForMask:orientationMask currentOrientation:currentOrientation];
+    if (targetOrientation != UIInterfaceOrientationUnknown) {
+        [[UIDevice currentDevice] setValue:@(targetOrientation) forKey:@"orientation"];
+        [UINavigationController attemptRotationToDeviceOrientation];
+    }
+
+    _isLocked = (orientationMask != UIInterfaceOrientationMaskAll);
 }
-#endif
 
-
--(void)screenOrientation:(CDVInvokedUrlCommand *)command
+- (void)applyOrientationMaskOnIOS16:(UIInterfaceOrientationMask)orientationMask callbackId:(NSString *)callbackId API_AVAILABLE(ios(16.0))
 {
-    CDVPluginResult* pluginResult;
-    NSInteger orientationMask = [[command argumentAtIndex:0] integerValue];
-    CDVViewController* vc = (CDVViewController*)self.viewController;
-    NSMutableArray* result = [[NSMutableArray alloc] init];
-    
-    if(orientationMask & 1) {
-        [result addObject:[NSNumber numberWithInt:UIInterfaceOrientationPortrait]];
+    UIInterfaceOrientation currentOrientation = [self currentInterfaceOrientation];
+    if (orientationMask != UIInterfaceOrientationMaskAll && !_isLocked) {
+        _lastOrientation = currentOrientation;
     }
-    if(orientationMask & 2) {
-        [result addObject:[NSNumber numberWithInt:UIInterfaceOrientationPortraitUpsideDown]];
+
+    UIWindow *window = self.viewController.view.window;
+    UIWindowScene *windowScene = window.windowScene;
+    if (windowScene == nil) {
+        [self sendPluginError:kMissingWindowSceneError callbackId:callbackId];
+        return;
     }
-    if(orientationMask & 4) {
-        [result addObject:[NSNumber numberWithInt:UIInterfaceOrientationLandscapeRight]];
-    }
-    if(orientationMask & 8) {
-        [result addObject:[NSNumber numberWithInt:UIInterfaceOrientationLandscapeLeft]];
-    }
+
+    __block BOOL hasCallback = NO;
+    void (^sendOnce)(CDVCommandStatus, NSString *) = ^(CDVCommandStatus status, NSString *message) {
+        if (hasCallback) {
+            return;
+        }
+        hasCallback = YES;
+
+        if (status == CDVCommandStatus_OK) {
+            [self sendPluginSuccess:callbackId];
+        } else {
+            [self sendPluginError:message callbackId:callbackId];
+        }
+    };
+
+    UIWindowSceneGeometryPreferencesIOS *preferences = [[UIWindowSceneGeometryPreferencesIOS alloc] initWithInterfaceOrientations:orientationMask];
+    [windowScene requestGeometryUpdateWithPreferences:preferences errorHandler:^(NSError * _Nonnull error) {
+        NSString *errorMessage = [NSString stringWithFormat:@"Failed to update interface orientation: %@", error.localizedDescription];
+        sendOnce(CDVCommandStatus_ERROR, errorMessage);
+    }];
+
+    [self.viewController setNeedsUpdateOfSupportedInterfaceOrientations];
+    _isLocked = (orientationMask != UIInterfaceOrientationMaskAll);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        sendOnce(CDVCommandStatus_OK, nil);
+    });
+}
+
+- (void)updateLegacySupportedOrientations
+{
+    CDVViewController *viewController = (CDVViewController *)self.viewController;
     SEL selector = NSSelectorFromString(@"setSupportedOrientations:");
-    
-    if([vc respondsToSelector:selector]) {
-        if (orientationMask != 15 || [UIDevice currentDevice] == nil) {
-            ((void (*)(CDVViewController*, SEL, NSMutableArray*))objc_msgSend)(vc,selector,result);
-        }
+    if (![viewController respondsToSelector:selector]) {
+        return;
+    }
 
-        if ([UIDevice currentDevice] != nil){
-            [self handleWithOrientationMask:orientationMask viewController:vc result:result selector:selector];
+    NSMutableArray *supportedOrientations = [[NSMutableArray alloc] init];
+    if (_supportedOrientationMask & UIInterfaceOrientationMaskPortrait) {
+        [supportedOrientations addObject:@(UIInterfaceOrientationPortrait)];
+    }
+    if (_supportedOrientationMask & UIInterfaceOrientationMaskPortraitUpsideDown) {
+        [supportedOrientations addObject:@(UIInterfaceOrientationPortraitUpsideDown)];
+    }
+    if (_supportedOrientationMask & UIInterfaceOrientationMaskLandscapeRight) {
+        [supportedOrientations addObject:@(UIInterfaceOrientationLandscapeRight)];
+    }
+    if (_supportedOrientationMask & UIInterfaceOrientationMaskLandscapeLeft) {
+        [supportedOrientations addObject:@(UIInterfaceOrientationLandscapeLeft)];
+    }
+
+    ((void (*)(CDVViewController*, SEL, NSMutableArray*))objc_msgSend)(viewController, selector, supportedOrientations);
+}
+
+- (void)registerScreenOrientationDelegate
+{
+    SEL selector = NSSelectorFromString(@"setScreenOrientationDelegate:");
+    if ([self.viewController respondsToSelector:selector]) {
+#if CDV_HAS_SCREEN_ORIENTATION_DELEGATE
+        ((void (*)(id, SEL, id<CDVScreenOrientationDelegate>))objc_msgSend)(self.viewController, selector, self);
+#else
+        ((void (*)(id, SEL, id))objc_msgSend)(self.viewController, selector, self);
+#endif
+    }
+}
+
+- (UIInterfaceOrientationMask)orientationMaskForValue:(NSString *)orientationValue
+{
+    if ([orientationValue isEqualToString:@"portrait-primary"]) {
+        return UIInterfaceOrientationMaskPortrait;
+    }
+    if ([orientationValue isEqualToString:@"portrait-secondary"]) {
+        return UIInterfaceOrientationMaskPortraitUpsideDown;
+    }
+    if ([orientationValue isEqualToString:@"landscape-primary"]) {
+        return UIInterfaceOrientationMaskLandscapeRight;
+    }
+    if ([orientationValue isEqualToString:@"landscape-secondary"]) {
+        return UIInterfaceOrientationMaskLandscapeLeft;
+    }
+    if ([orientationValue isEqualToString:@"portrait"]) {
+        return UIInterfaceOrientationMaskPortrait | UIInterfaceOrientationMaskPortraitUpsideDown;
+    }
+    if ([orientationValue isEqualToString:@"landscape"]) {
+        return UIInterfaceOrientationMaskLandscape;
+    }
+    if ([orientationValue isEqualToString:@"any"]) {
+        return UIInterfaceOrientationMaskAll;
+    }
+
+    return 0;
+}
+
+- (UIInterfaceOrientation)targetInterfaceOrientationForMask:(UIInterfaceOrientationMask)orientationMask currentOrientation:(UIInterfaceOrientation)currentOrientation
+{
+    if (orientationMask == UIInterfaceOrientationMaskLandscapeLeft) {
+        return UIInterfaceOrientationLandscapeLeft;
+    }
+    if (orientationMask == UIInterfaceOrientationMaskLandscapeRight) {
+        return UIInterfaceOrientationLandscapeRight;
+    }
+    if (orientationMask == UIInterfaceOrientationMaskPortrait) {
+        return UIInterfaceOrientationPortrait;
+    }
+    if (orientationMask == UIInterfaceOrientationMaskPortraitUpsideDown) {
+        return UIInterfaceOrientationPortraitUpsideDown;
+    }
+    if (orientationMask == UIInterfaceOrientationMaskLandscape) {
+        if (UIInterfaceOrientationIsLandscape(currentOrientation)) {
+            return currentOrientation;
         }
-        
-        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+        return UIInterfaceOrientationLandscapeLeft;
     }
-    else {
-        pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_INVALID_ACTION messageAsString:@"Error calling to set supported orientations"];
+    if (orientationMask == (UIInterfaceOrientationMaskPortrait | UIInterfaceOrientationMaskPortraitUpsideDown)) {
+        if (UIInterfaceOrientationIsPortrait(currentOrientation)) {
+            return currentOrientation;
+        }
+        return UIInterfaceOrientationPortrait;
     }
-    
-    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-    
+    if (orientationMask == UIInterfaceOrientationMaskAll && _lastOrientation != UIInterfaceOrientationUnknown) {
+        return _lastOrientation;
+    }
+
+    return UIInterfaceOrientationUnknown;
+}
+
+- (UIInterfaceOrientation)currentInterfaceOrientation
+{
+    if (@available(iOS 13.0, *)) {
+        UIWindowScene *windowScene = self.viewController.view.window.windowScene;
+        if (windowScene != nil) {
+            return windowScene.interfaceOrientation;
+        }
+    }
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    return [UIApplication sharedApplication].statusBarOrientation;
+#pragma clang diagnostic pop
+}
+
+- (void)sendPluginSuccess:(NSString *)callbackId
+{
+    CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
+    [self.commandDelegate sendPluginResult:pluginResult callbackId:callbackId];
+}
+
+- (void)sendPluginError:(NSString *)message callbackId:(NSString *)callbackId
+{
+    CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:message];
+    [self.commandDelegate sendPluginResult:pluginResult callbackId:callbackId];
 }
 
 @end
