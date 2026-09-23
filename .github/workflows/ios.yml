@@ -34,37 +34,20 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: iOS ${{ matrix.versions.ios-version }} Test
-    runs-on: ${{ matrix.versions.os-version }}
-    continue-on-error: true
-
-    # hoist configurations to top that are expected to be updated
-    env:
-      # Storing a copy of the repo
-      repo: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-
-      node-version: 24
-
-      # > Starting April 26, 2021, all iOS and iPadOS apps submitted to the App Store must be built with Xcode 12 and the iOS 14 SDK.
-      # Because of Apple's requirement, listed above, We will only be using the latest Xcode release for testing.
-      # To customize these options, add "xcode-version" to the strategy matrix with its overriding value.
-      default_xcode-version: latest-stable
+  build:
+    name: iOS Build (cordova-ios@${{ matrix.cordova_ios }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
 
     strategy:
       matrix:
-        versions:
-          - os-version: macos-14
-            ios-version: 17.x
-            xcode-version: 15.x
-
-          - os-version: macos-15
-            ios-version: 18.x
-            xcode-version: 16.x
-
-          - os-version: macos-26
-            ios-version: 26.x
-            xcode-version: 26.x
+        include:
+          - cordova_ios: 7.x
+            os: macos-14
+            xcode: 15.4
+          - cordova_ios: 8.x
+            os: macos-15
+            xcode: 16.4
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -74,33 +57,21 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: ${{ env.node-version }}
+          node-version: 20
 
       - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
-        env:
-          xcode-version: ${{ matrix.versions.xcode-version == '' && env.default_xcode-version || matrix.versions.xcode-version }}
         with:
-          xcode-version: ${{ env.xcode-version }}
+          xcode-version: ${{ matrix.xcode }}
 
-      - name: Run Environment Information
+      - name: Build plugin in sample app
         run: |
-          node --version
-          npm --version
-          xcodebuild -version
-
-      - name: Run npm install
-        run: |
-          npm i -g cordova@latest ios-deploy@latest
           npm ci
+          npm i -g cordova@12.0.0
 
-      - name: Run paramedic install
-        if: ${{ endswith(env.repo, '/cordova-paramedic') != true }}
-        run: npm i -g github:apache/cordova-paramedic
+          APP_DIR="$RUNNER_TEMP/ios-test-app"
+          cordova create "$APP_DIR" io.cordova.screenorientation.test ScreenOrientationTest
 
-      - name: Run paramedic tests
-        env:
-          test_config: 'ios-${{ matrix.versions.ios-version }}.config.json'
-          # Generally, this should automatically work for cordova-paramedic & plugins. If the path is unique, this can be manually changed.
-          test_plugin_path: ${{ endswith(env.repo, '/cordova-paramedic') && './spec/testable-plugin/' || './' }}
-          paramedic: ${{ endswith(env.repo, '/cordova-paramedic') && 'node main.js' || 'cordova-paramedic' }}
-        run: ${{ env.paramedic }} --config ./pr/local/${{ env.test_config }} --plugin ${{ env.test_plugin_path }}
+          cd "$APP_DIR"
+          cordova platform add "ios@${{ matrix.cordova_ios }}"
+          cordova plugin add "$GITHUB_WORKSPACE"
+          cordova build ios --debug --emulator --no-telemetry

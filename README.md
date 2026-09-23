@@ -47,6 +47,15 @@ The plugin adds the following to the screen object (`window.screen`):
 cordova plugin add cordova-plugin-screen-orientation
 ```
 
+## Platform Compatibility
+
+| Platform | Cordova platform versions |
+| --- | --- |
+| Android | `cordova-android@14.x`, `cordova-android@15.x` |
+| iOS | `cordova-ios@7.x`, `cordova-ios@8.x` |
+
+Build/API compatibility does not guarantee that every OS/device combination will physically rotate when a lock is requested.
+
 ## Supported Orientations
 
 #### portrait-primary
@@ -74,10 +83,10 @@ cordova plugin add cordova-plugin-screen-orientation
 
 ```js
 // set to either landscape
-screen.orientation.lock('landscape');
+await screen.orientation.lock('landscape');
 
 // allow user rotate
-screen.orientation.unlock();
+await screen.orientation.unlock();
 
 // access current orientation
 console.log('Orientation is ' + screen.orientation.type);
@@ -114,6 +123,8 @@ screen.orientation.onchange = function(){console.log(screen.orientation.type);
 ## Android Notes
 
 The __screen.orientation__ property will not update when the phone is [rotated 180 degrees](http://www.quirksmode.org/dom/events/orientationchange.html).
+
+On Android API 36+, the platform may ignore orientation locks on some large-screen and foldable devices. A successful plugin call means the request was accepted by Android, not that a visible rotation is guaranteed.
 
 ## Windows UWP Notes
 

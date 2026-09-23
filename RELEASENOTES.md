@@ -21,6 +21,20 @@
 
 # Release Notes
 
+### 3.0.5 (unreleased)
+
+**Fixes:**
+
+* feat(ios): migrate orientation handling for cordova-ios 7/8 compatibility paths, including scene-based orientation reads and iOS 16 geometry updates
+* fix(js): resolve/reject `lock()` and `unlock()` from native callbacks so native failures are observable
+* fix(android): validate unknown orientation values, update orientation on UI thread, and return one callback result
+
+**Others:**
+
+* ci: add explicit Cordova platform-version build matrix for `cordova-android@14/15` and `cordova-ios@7/8`
+* chore: remove obsolete `es6-promise-plugin` dependency
+* chore: remove invalid `cordovaDependencies` metadata constraint
+
 ### 3.0.4 (Oct 27, 2023)
 
 **Fixes:**

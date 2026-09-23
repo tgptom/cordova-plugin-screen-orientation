@@ -122,22 +122,27 @@ exports.defineAutoTests = function () {
     // test addEventListener('change') works
     // test onchange works
     describe('window.screen.orientation', function () {
+        it('should reject invalid orientations', function () {
+            return window.screen.orientation.lock('not-a-valid-orientation').then(function () {
+                fail('Expected lock to reject invalid orientation value.');
+            }, function (error) {
+                expect(error).toBeDefined();
+                expect(error.name).toBe('NotSupportedError');
+            });
+        });
+
         if (isLockable) {
             it('should successfully lock and unlock screen orientation', function () {
                 return window.screen.orientation.lock('portrait').then(function () {
                     expect(window.screen.orientation.type).toMatch(/^portrait-/);
-                    expect(window.screen.orientation.unlock).not.toThrow();
+                    var unlockResult = window.screen.orientation.unlock();
+                    expect(unlockResult).toBeDefined();
+                    expect(typeof unlockResult.then).toBe('function');
+                    return unlockResult;
                 });
             });
         }
         // We do not test "not isLockable" states because it isn't testable.
-        // The error stating it's not supported is not actually passed to the
-        // promise reject function, so the error is not catchable. The error
-        // is only ever printed to the JS console if nothing catches errors.
-        // The promise itself is fulfilled successfully, despite the action
-        // not doing what is expected.
-        // I believe this might be a privacy security mechanism to avoid device
-        // fingerprinting.
     });
 };
 exports.defineManualTests = function (contentEl, createActionButton) {

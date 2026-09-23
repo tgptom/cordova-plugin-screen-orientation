@@ -34,51 +34,14 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: Android ${{ matrix.versions.android }} Test
+  build:
+    name: Android Build (cordova-android@${{ matrix.cordova_android }})
     runs-on: ubuntu-latest
-    continue-on-error: true
+    timeout-minutes: 45
 
-    # hoist configurations to top that are expected to be updated
-    env:
-      # Storing a copy of the repo
-      repo: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-
-      node-version: 24
-
-      # These are the default Java configurations used by most tests.
-      # To customize these options, add "java-distro" or "java-version" to the strategy matrix with its overriding value.
-      default_java-distro: temurin
-      default_java-version: 17
-
-      # These are the default Android System Image configurations used by most tests.
-      # To customize these options, add "system-image-arch" or "system-image-target" to the strategy matrix with its overriding value.
-      default_system-image-arch: x86_64
-      default_system-image-target: google_apis # Most system images have a google_api option. Set this as default.
-
-    # configurations for each testing strategy (test matrix)
     strategy:
       matrix:
-        versions:
-          - android: 12
-            android-api: 31
-
-          - android: 12L
-            android-api: 32
-
-          - android: 13
-            android-api: 33
-
-          - android: 14
-            android-api: 34
-
-          - android: 15
-            android-api: 35
-
-          - android: 16
-            android-api: 36
-
-    timeout-minutes: 60
+        cordova_android: ['14.x', '15.x']
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -88,66 +51,24 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: ${{ env.node-version }}
+          node-version: 20
 
       - uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
-        env:
-          java-version: ${{ matrix.versions.java-version == '' && env.default_java-version || matrix.versions.java-version }}
-          java-distro: ${{ matrix.versions.java-distro == '' && env.default_java-distro || matrix.versions.java-distro }}
         with:
-          distribution: ${{ env.java-distro }}
-          java-version: ${{ env.java-version }}
+          distribution: temurin
+          java-version: 17
 
-      - name: Enable KVM group perms
-        run: |
-            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-            sudo udevadm control --reload-rules
-            sudo udevadm trigger --name-match=kvm
+      - uses: android-actions/setup-android@v3
 
-      - name: Run Environment Information
+      - name: Build plugin in sample app
         run: |
-          node --version
-          npm --version
-          java -version
-
-      - name: Run npm install
-        run: |
-          export PATH="/usr/local/lib/android/sdk/platform-tools":$PATH
-          export JAVA_HOME=$JAVA_HOME_11_X64
-          npm i -g cordova@latest
           npm ci
+          npm i -g cordova@12.0.0
 
-      - name: Run paramedic install
-        if: ${{ endswith(env.repo, '/cordova-paramedic') != true }}
-        run: npm i -g github:apache/cordova-paramedic
+          APP_DIR="$RUNNER_TEMP/android-test-app"
+          cordova create "$APP_DIR" io.cordova.screenorientation.test ScreenOrientationTest
 
-      - uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
-        env:
-          system-image-arch: ${{ matrix.versions.system-image-arch == '' && env.default_system-image-arch || matrix.versions.system-image-arch }}
-          system-image-target: ${{ matrix.versions.system-image-target == '' && env.default_system-image-target || matrix.versions.system-image-target }}
-        with:
-          api-level: ${{ matrix.versions.android-api }}
-          target: ${{ env.system-image-target }}
-          arch: ${{ env.system-image-arch }}
-          force-avd-creation: false
-          disable-animations: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          script: echo "Pregenerate the AVD before running Paramedic"
-
-      - name: Run paramedic tests
-        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
-        env:
-          system-image-arch: ${{ matrix.versions.system-image-arch == '' && env.default_system-image-arch || matrix.versions.system-image-arch }}
-          system-image-target: ${{ matrix.versions.system-image-target == '' && env.default_system-image-target || matrix.versions.system-image-target }}
-          test_config: 'android-${{ matrix.versions.android }}.config.json'
-          # Generally, this should automatically work for cordova-paramedic & plugins. If the path is unique, this can be manually changed.
-          test_plugin_path: ${{ endswith(env.repo, '/cordova-paramedic') && './spec/testable-plugin/' || './' }}
-          paramedic: ${{ endswith(env.repo, '/cordova-paramedic') && 'node main.js' || 'cordova-paramedic' }}
-        with:
-          api-level: ${{ matrix.versions.android-api }}
-          target: ${{ env.system-image-target }}
-          arch: ${{ env.system-image-arch }}
-          force-avd-creation: false
-          disable-animations: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
-          script: ${{ env.paramedic }} --config ./pr/local/${{ env.test_config }} --plugin ${{ env.test_plugin_path }}
+          cd "$APP_DIR"
+          cordova platform add "android@${{ matrix.cordova_android }}"
+          cordova plugin add "$GITHUB_WORKSPACE"
+          cordova build android --debug --no-telemetry

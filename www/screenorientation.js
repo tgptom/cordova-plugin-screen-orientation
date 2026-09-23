@@ -41,34 +41,41 @@ if (!window.OrientationLockType) {
         any: 15 // All orientations are supported (unlocked orientation)
     };
 }
-var orientationMask = 1;
 screenOrientation.setOrientation = function (orientation) {
-    orientationMask = window.OrientationLockType[orientation];
-    cordova.exec(null, null, 'CDVOrientation', 'screenOrientation', [orientationMask, orientation]);
+    return new Promise(function (resolve, reject) {
+        cordova.exec(resolve, function (errorMessage) {
+            reject(normalizeError(errorMessage, orientation));
+        }, 'CDVOrientation', 'screenOrientation', [orientation]);
+    });
 };
 
 screenOrientation.lock = function (orientation) {
-    var p = new Promise(function (resolve, reject) {
-        resolveOrientation(orientation, resolve, reject);
-    });
-    return p;
+    return resolveOrientation(orientation);
 };
 
 screenOrientation.unlock = function () {
-    screenOrientation.setOrientation('any');
+    return screenOrientation.setOrientation('any');
 };
 
 setOrientationProperties();
 
-function resolveOrientation (orientation, resolve, reject) {
+function resolveOrientation (orientation) {
     if (!Object.prototype.hasOwnProperty.call(OrientationLockType, orientation)) {
         var err = new Error();
         err.name = 'NotSupportedError';
-        reject(err); // "cannot change orientation");
-    } else {
-        screenOrientation.setOrientation(orientation);
-        resolve('Orientation set'); // orientation change successful
+        return Promise.reject(err);
     }
+
+    return screenOrientation.setOrientation(orientation);
+}
+
+function normalizeError (errorMessage, orientation) {
+    var err = new Error(errorMessage || ('Unable to lock orientation: ' + orientation));
+    if (errorMessage === 'Unknown orientation value') {
+        err.name = 'NotSupportedError';
+    }
+
+    return err;
 }
 
 var onChangeListener = null;
