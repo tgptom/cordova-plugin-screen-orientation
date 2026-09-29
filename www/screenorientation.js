@@ -42,6 +42,17 @@ if (!window.OrientationLockType) {
     };
 }
 
+// Orientation values accepted by lock(), independent of any native OrientationLockType.
+var SUPPORTED_ORIENTATIONS = [
+    'portrait-primary',
+    'portrait-secondary',
+    'landscape-primary',
+    'landscape-secondary',
+    'portrait',
+    'landscape',
+    'any'
+];
+
 /**
  * Requests the given orientation from the native side.
  * The returned Promise settles only when the native callback is invoked:
@@ -72,8 +83,7 @@ screenOrientation.unlock = function () {
 setOrientationProperties();
 
 function isSupportedOrientation (orientation) {
-    return typeof orientation === 'string' &&
-        Object.prototype.hasOwnProperty.call(window.OrientationLockType, orientation);
+    return typeof orientation === 'string' && SUPPORTED_ORIENTATIONS.indexOf(orientation) !== -1;
 }
 
 function createError (name, message) {

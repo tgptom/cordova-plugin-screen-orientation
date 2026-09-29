@@ -41,7 +41,7 @@ jobs:
     timeout-minutes: 45
 
     env:
-      node-version: 22
+      node-version: 24
       # Pinned Cordova CLI compatible with cordova-ios 7.x and 8.x.
       cordova-cli: 13.0.0
 

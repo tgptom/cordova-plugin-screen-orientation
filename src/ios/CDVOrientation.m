@@ -216,9 +216,24 @@ static UIInterfaceOrientationMask CDVOrientationViewControllerSupportedInterface
     void (^finish)(NSError *) = ^(NSError *error) {
         // Always executed on the main queue.
         CDVOrientation *strongSelf = weakSelf;
-        if (finished || strongSelf == nil) {
+        if (strongSelf == nil) {
+            return;
+        }
+
+        if (error != nil && strongSelf->_requestGeneration == generation) {
+            // Roll back so the plugin state reflects what is actually applied,
+            // unless a newer request has replaced this one.
+            strongSelf->_supportedOrientationMask = previousMask;
+            strongSelf->_isLocked = previousIsLocked;
+            if ([strongSelf usesLegacyOrientationSupport]) {
+                [strongSelf updateLegacySupportedOrientations];
+            }
+            [strongSelf.viewController setNeedsUpdateOfSupportedInterfaceOrientations];
+        }
+
+        if (finished) {
             if (error != nil) {
-                NSLog(@"[CDVOrientation] Late orientation geometry update failure: %@", error);
+                NSLog(@"[CDVOrientation] Orientation geometry update failed after the request was resolved: %@", error);
             }
             return;
         }
@@ -229,15 +244,6 @@ static UIInterfaceOrientationMask CDVOrientationViewControllerSupportedInterface
             return;
         }
 
-        if (strongSelf->_requestGeneration == generation) {
-            // Roll back so the plugin state reflects what is actually applied.
-            strongSelf->_supportedOrientationMask = previousMask;
-            strongSelf->_isLocked = previousIsLocked;
-            if ([strongSelf usesLegacyOrientationSupport]) {
-                [strongSelf updateLegacySupportedOrientations];
-            }
-            [strongSelf.viewController setNeedsUpdateOfSupportedInterfaceOrientations];
-        }
         [strongSelf sendErrorNamed:kCDVOrientationAbortError
                            message:[NSString stringWithFormat:@"Failed to update interface orientation: %@", error.localizedDescription]
                         callbackId:callbackId];

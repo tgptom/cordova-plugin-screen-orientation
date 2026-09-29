@@ -41,7 +41,7 @@ jobs:
     timeout-minutes: 45
 
     env:
-      node-version: 22
+      node-version: 24
       # Pinned Cordova CLI compatible with cordova-android 14.x and 15.x.
       cordova-cli: 13.0.0
       # cordova-android 14.x (AGP 8.7) and 15.x (AGP 8.10) both require JDK 17.

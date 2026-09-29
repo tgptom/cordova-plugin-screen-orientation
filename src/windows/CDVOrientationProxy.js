@@ -28,19 +28,30 @@ if (!window.Promise) {
     window.Promise = WinJS.Promise;
 }
 
+// Same bit values as OrientationLockType in www/screenorientation.js.
+var ORIENTATION_MASKS = {
+    'portrait-primary': 1,
+    'portrait-secondary': 2,
+    'landscape-primary': 4,
+    'landscape-secondary': 8,
+    portrait: 3,
+    landscape: 12,
+    any: 15
+};
+
 module.exports = {
     screenOrientation: function (win, fail, args) {
         // console.log("screenOrientation proxy called with " + args);
 
         var orientation = args[0];
         if (typeof orientation !== 'string' ||
-            !Object.prototype.hasOwnProperty.call(window.OrientationLockType, orientation)) {
+            !Object.prototype.hasOwnProperty.call(ORIENTATION_MASKS, orientation)) {
             fail({ name: 'NotSupportedError', message: 'Unsupported orientation value: ' + orientation });
             return;
         }
 
         try {
-            var prefOrients = window.OrientationLockType[orientation];
+            var prefOrients = ORIENTATION_MASKS[orientation];
             var winPrefs = 0;
 
             if (prefOrients & 1) {
