@@ -39,6 +39,10 @@ var ORIENTATION_MASKS = {
     any: 15
 };
 
+function updateError (err) {
+    return { name: 'Error', message: 'Failed to update orientation: ' + err };
+}
+
 module.exports = {
     screenOrientation: function (win, fail, args) {
         // console.log("screenOrientation proxy called with " + args);
@@ -74,14 +78,14 @@ module.exports = {
                 try {
                     DisplayInfo.autoRotationPreferences = winPrefs;
                 } catch (err) {
-                    fail({ name: 'Error', message: 'Failed to update orientation: ' + err });
+                    fail(updateError(err));
                     return;
                 }
                 win();
             }, 0);
         } catch (err) {
             console.log('error :: ' + err);
-            fail({ name: 'Error', message: 'Failed to update orientation: ' + err });
+            fail(updateError(err));
         }
     }
 };

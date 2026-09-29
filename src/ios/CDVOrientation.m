@@ -61,6 +61,8 @@ static UIInterfaceOrientationMask CDVOrientationViewControllerSupportedInterface
         return mask;
     }
 
+    // This IMP is installed on CDVViewController itself, so "super" is
+    // CDVViewController's superclass regardless of the receiver's subclass.
     struct objc_super superInfo = {
         .receiver = self,
         .super_class = class_getSuperclass([CDVViewController class])
@@ -168,6 +170,7 @@ static UIInterfaceOrientationMask CDVOrientationViewControllerSupportedInterface
     UIInterfaceOrientation currentOrientation = [self currentInterfaceOrientation];
     UIInterfaceOrientationMask previousMask = _supportedOrientationMask;
     BOOL previousIsLocked = _isLocked;
+    UIInterfaceOrientation previousLastOrientation = _lastOrientation;
 
     if (!isUnlock && !_isLocked) {
         _lastOrientation = currentOrientation;
@@ -186,6 +189,7 @@ static UIInterfaceOrientationMask CDVOrientationViewControllerSupportedInterface
                                         windowScene:(isUnlock ? nil : window.windowScene)
                                        previousMask:previousMask
                                    previousIsLocked:previousIsLocked
+                            previousLastOrientation:previousLastOrientation
                                          generation:generation
                                          callbackId:callbackId];
         return;
@@ -201,6 +205,7 @@ static UIInterfaceOrientationMask CDVOrientationViewControllerSupportedInterface
                                   windowScene:(UIWindowScene *)windowScene
                                  previousMask:(UIInterfaceOrientationMask)previousMask
                              previousIsLocked:(BOOL)previousIsLocked
+                      previousLastOrientation:(UIInterfaceOrientation)previousLastOrientation
                                    generation:(NSUInteger)generation
                                    callbackId:(NSString *)callbackId API_AVAILABLE(ios(16.0))
 {
@@ -225,6 +230,7 @@ static UIInterfaceOrientationMask CDVOrientationViewControllerSupportedInterface
             // unless a newer request has replaced this one.
             strongSelf->_supportedOrientationMask = previousMask;
             strongSelf->_isLocked = previousIsLocked;
+            strongSelf->_lastOrientation = previousLastOrientation;
             if ([strongSelf usesLegacyOrientationSupport]) {
                 [strongSelf updateLegacySupportedOrientations];
             }
