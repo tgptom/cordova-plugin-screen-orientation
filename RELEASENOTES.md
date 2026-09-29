@@ -21,6 +21,25 @@
 
 # Release Notes
 
+### 3.0.5-dev (unreleased)
+
+**Fixes:**
+
+* feat(ios): support `cordova-ios@8.x` with a plugin-owned orientation mask exposed through `CDVScreenOrientationDelegate`, while keeping the `cordova-ios@7.x` legacy integration
+* fix(ios): use the Cordova view controller's own `UIWindowScene` for iOS 16+ geometry updates and orientation reads, replacing `connectedScenes.anyObject` and `statusBarOrientation` (kept only as a legacy fallback)
+* fix(ios): report missing window scene, geometry update failures and unsupported orientations as errors
+* fix(js): `lock()` and `unlock()` settle from the native callback and reject on native errors; unsupported values reject with `NotSupportedError`
+* fix(android): validate orientation values, apply orientation changes on the UI thread and invoke the callback exactly once
+* fix(windows): validate orientation values sent by the JavaScript bridge
+
+**Others:**
+
+* ci: explicit build matrix for `cordova-android@14.x`, `cordova-android@15.x`, `cordova-ios@7.x` and `cordova-ios@8.x` with a pinned Cordova CLI
+* test: add JavaScript unit tests for Promise resolution/rejection, invalid values, `lock()` and `unlock()`
+* chore: remove obsolete `es6-promise-plugin` dependency
+* chore: remove invalid `engines.cordovaDependencies` metadata and synchronize `package-lock.json`
+* docs: add compatibility matrix and Android API 36 large-screen behavior notes
+
 ### 3.0.4 (Oct 27, 2023)
 
 **Fixes:**

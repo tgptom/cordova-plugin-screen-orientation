@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-name: iOS Testsuite
+name: iOS Build
 
 on:
   push:
@@ -34,36 +34,27 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: iOS ${{ matrix.versions.ios-version }} Test
+  build:
+    # Cordova platform package versions (not iOS OS versions).
+    name: cordova-ios@${{ matrix.versions.cordova-ios }} build (Xcode ${{ matrix.versions.xcode-version }})
     runs-on: ${{ matrix.versions.os-version }}
-    continue-on-error: true
+    timeout-minutes: 45
 
-    # hoist configurations to top that are expected to be updated
     env:
-      # Storing a copy of the repo
-      repo: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
-
-      node-version: 24
-
-      # > Starting April 26, 2021, all iOS and iPadOS apps submitted to the App Store must be built with Xcode 12 and the iOS 14 SDK.
-      # Because of Apple's requirement, listed above, We will only be using the latest Xcode release for testing.
-      # To customize these options, add "xcode-version" to the strategy matrix with its overriding value.
-      default_xcode-version: latest-stable
+      node-version: 22
+      # Pinned Cordova CLI compatible with cordova-ios 7.x and 8.x.
+      cordova-cli: 13.0.0
 
     strategy:
+      fail-fast: false
       matrix:
         versions:
-          - os-version: macos-14
-            ios-version: 17.x
-            xcode-version: 15.x
+          - cordova-ios: 7.x
+            os-version: macos-15
+            xcode-version: '16.4'
 
-          - os-version: macos-15
-            ios-version: 18.x
-            xcode-version: 16.x
-
-          - os-version: macos-26
-            ios-version: 26.x
+          - cordova-ios: 8.x
+            os-version: macos-26
             xcode-version: 26.x
 
     steps:
@@ -77,30 +68,39 @@ jobs:
           node-version: ${{ env.node-version }}
 
       - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
-        env:
-          xcode-version: ${{ matrix.versions.xcode-version == '' && env.default_xcode-version || matrix.versions.xcode-version }}
         with:
-          xcode-version: ${{ env.xcode-version }}
+          xcode-version: ${{ matrix.versions.xcode-version }}
+
+      - name: Run npm install and plugin tests
+        run: |
+          npm ci
+          npm test
+
+      - name: Install Cordova CLI
+        run: npm i -g cordova@${{ env.cordova-cli }}
 
       - name: Run Environment Information
         run: |
           node --version
           npm --version
           xcodebuild -version
+          cordova --version
 
-      - name: Run npm install
-        run: |
-          npm i -g cordova@latest ios-deploy@latest
-          npm ci
-
-      - name: Run paramedic install
-        if: ${{ endswith(env.repo, '/cordova-paramedic') != true }}
-        run: npm i -g github:apache/cordova-paramedic
-
-      - name: Run paramedic tests
+      - name: Create app, add platform and plugins
         env:
-          test_config: 'ios-${{ matrix.versions.ios-version }}.config.json'
-          # Generally, this should automatically work for cordova-paramedic & plugins. If the path is unique, this can be manually changed.
-          test_plugin_path: ${{ endswith(env.repo, '/cordova-paramedic') && './spec/testable-plugin/' || './' }}
-          paramedic: ${{ endswith(env.repo, '/cordova-paramedic') && 'node main.js' || 'cordova-paramedic' }}
-        run: ${{ env.paramedic }} --config ./pr/local/${{ env.test_config }} --plugin ${{ env.test_plugin_path }}
+          CORDOVA_IOS: ${{ matrix.versions.cordova-ios }}
+        run: |
+          APP_DIR="$RUNNER_TEMP/ios-app"
+          cordova create "$APP_DIR" org.apache.cordova.screenorientation.test ScreenOrientationTest --no-telemetry
+          cd "$APP_DIR"
+          cordova platform add "ios@$CORDOVA_IOS" --no-telemetry
+          cordova plugin add "$GITHUB_WORKSPACE" --no-telemetry
+          cordova plugin add "$GITHUB_WORKSPACE/tests" --no-telemetry
+          cordova platform ls --no-telemetry
+          cordova plugin ls --no-telemetry
+
+      - name: Clean debug build (simulator)
+        run: |
+          cd "$RUNNER_TEMP/ios-app"
+          cordova clean ios --no-telemetry
+          cordova build ios --debug --emulator --no-telemetry
