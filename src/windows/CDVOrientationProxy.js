@@ -32,8 +32,15 @@ module.exports = {
     screenOrientation: function (win, fail, args) {
         // console.log("screenOrientation proxy called with " + args);
 
+        var orientation = args[0];
+        if (typeof orientation !== 'string' ||
+            !Object.prototype.hasOwnProperty.call(window.OrientationLockType, orientation)) {
+            fail({ name: 'NotSupportedError', message: 'Unsupported orientation value: ' + orientation });
+            return;
+        }
+
         try {
-            var prefOrients = args[0];
+            var prefOrients = window.OrientationLockType[orientation];
             var winPrefs = 0;
 
             if (prefOrients & 1) {
@@ -53,12 +60,17 @@ module.exports = {
                 winPrefs = winPrefs | Orientations.landscapeFlipped;
             }
             setTimeout(function () {
-                DisplayInfo.autoRotationPreferences = winPrefs;
+                try {
+                    DisplayInfo.autoRotationPreferences = winPrefs;
+                } catch (err) {
+                    fail({ name: 'Error', message: 'Failed to update orientation: ' + err });
+                    return;
+                }
                 win();
             }, 0);
         } catch (err) {
             console.log('error :: ' + err);
-            fail();
+            fail({ name: 'Error', message: 'Failed to update orientation: ' + err });
         }
     }
 };

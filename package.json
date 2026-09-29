@@ -5,7 +5,8 @@
   "repository": "github:apache/cordova-plugin-screen-orientation",
   "bugs": "https://github.com/apache/cordova-plugin-screen-orientation/issues",
   "scripts": {
-    "test": "npm run lint",
+    "test": "npm run lint && npm run test:unit",
+    "test:unit": "node --test tests/unit/*.test.js",
     "lint": "eslint ."
   },
   "cordova": {
