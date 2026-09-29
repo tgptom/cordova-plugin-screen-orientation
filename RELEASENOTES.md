@@ -21,7 +21,7 @@
 
 # Release Notes
 
-### 3.0.5-dev (unreleased)
+### 4.0.0 (Sep 29, 2026)
 
 **Fixes:**
 
