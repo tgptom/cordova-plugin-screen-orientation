@@ -18,7 +18,7 @@
 
 <plugin xmlns="http://apache.org/cordova/ns/plugins/1.0"
     id="cordova-plugin-screen-orientation"
-    version="3.0.5-dev">
+    version="4.0.0">
     <name>Screen Orientation</name>
     <description>Cordova Screen Orientation plugin</description>
     <license>Apache 2.0</license>
@@ -52,9 +52,6 @@
                 <param name="android-package" value="cordova.plugins.screenorientation.CDVOrientation" />
             </feature>
         </config-file>
-
-        <dependency id="es6-promise-plugin" version="^4.1.0" />
-
     </platform>
 
     <platform name="windows">

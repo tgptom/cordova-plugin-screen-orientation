@@ -23,13 +23,35 @@
 #import <UIKit/UIKit.h>
 #import <Cordova/CDVViewController.h>
 
+#if __has_include(<Cordova/CDVScreenOrientationDelegate.h>)
+#import <Cordova/CDVScreenOrientationDelegate.h>
+#define CDV_ORIENTATION_HAS_SCREEN_ORIENTATION_DELEGATE 1
+#else
+#define CDV_ORIENTATION_HAS_SCREEN_ORIENTATION_DELEGATE 0
+#endif
+
+// CDVScreenOrientationDelegate is marked deprecated in cordova-ios 8, but it is
+// still the public Cordova protocol describing an orientation provider.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 @interface CDVOrientation : CDVPlugin
+#if CDV_ORIENTATION_HAS_SCREEN_ORIENTATION_DELEGATE
+<CDVScreenOrientationDelegate>
+#endif
 {
 @protected
     BOOL _isLocked;
     UIInterfaceOrientation _lastOrientation;
+    // Plugin-owned orientation mask. 0 means the plugin has not requested any orientation yet.
+    UIInterfaceOrientationMask _supportedOrientationMask;
+    NSUInteger _requestGeneration;
 }
 
 - (void)screenOrientation:(CDVInvokedUrlCommand *)command;
 
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations;
+
+- (BOOL)shouldAutorotate;
+
 @end
+#pragma clang diagnostic pop

@@ -26,6 +26,7 @@ import org.apache.cordova.CordovaPlugin;
 
 import org.json.JSONArray;
 import org.json.JSONException;
+import org.json.JSONObject;
 
 import android.app.Activity;
 import android.content.pm.ActivityInfo;
@@ -46,6 +47,12 @@ public class CDVOrientation extends CordovaPlugin {
     private static final String LANDSCAPE_SECONDARY = "landscape-secondary";
     private static final String PORTRAIT = "portrait";
     private static final String LANDSCAPE = "landscape";
+
+    private static final String NOT_SUPPORTED_ERROR = "NotSupportedError";
+    private static final String INVALID_STATE_ERROR = "InvalidStateError";
+    private static final String GENERIC_ERROR = "Error";
+
+    private static final int UNKNOWN_ORIENTATION = Integer.MIN_VALUE;
     
     @Override
     public boolean execute(String action, JSONArray args, CallbackContext callbackContext) {
@@ -54,45 +61,77 @@ public class CDVOrientation extends CordovaPlugin {
         
         // Route the Action
         if (action.equals("screenOrientation")) {
-            return routeScreenOrientation(args, callbackContext);
+            routeScreenOrientation(args, callbackContext);
+            return true;
         }
         
-        // Action not found
-        callbackContext.error("action not recognised");
+        // Action not found: returning false makes Cordova report INVALID_ACTION exactly once
         return false;
     }
     
-    private boolean routeScreenOrientation(JSONArray args, CallbackContext callbackContext) {
+    private void routeScreenOrientation(JSONArray args, final CallbackContext callbackContext) {
         
-        String action = args.optString(0);
-        
-        
-        
-        String orientation = args.optString(1);
+        final String orientation = args.optString(0, "");
         
         Log.d(TAG, "Requested ScreenOrientation: " + orientation);
         
-        Activity activity = cordova.getActivity();
-        
-        if (orientation.equals(ANY)) {
-            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
-        } else if (orientation.equals(LANDSCAPE_PRIMARY)) {
-            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
-        } else if (orientation.equals(PORTRAIT_PRIMARY)) {
-            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-        } else if (orientation.equals(LANDSCAPE)) {
-            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
-        } else if (orientation.equals(PORTRAIT)) {
-            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);
-        } else if (orientation.equals(LANDSCAPE_SECONDARY)) {
-            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE);
-        } else if (orientation.equals(PORTRAIT_SECONDARY)) {
-            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT);
+        final int requestedOrientation = toActivityOrientation(orientation);
+        if (requestedOrientation == UNKNOWN_ORIENTATION) {
+            sendError(callbackContext, NOT_SUPPORTED_ERROR, "Unsupported orientation value: " + orientation);
+            return;
         }
-        
-        callbackContext.success();
-        return true;
-        
-        
+
+        final Activity activity = cordova.getActivity();
+        if (activity == null) {
+            sendError(callbackContext, INVALID_STATE_ERROR, "No Activity is available to change the orientation");
+            return;
+        }
+
+        activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    activity.setRequestedOrientation(requestedOrientation);
+                } catch (RuntimeException e) {
+                    Log.e(TAG, "Unable to set requested orientation", e);
+                    sendError(callbackContext, GENERIC_ERROR, "Unable to set orientation: " + e.getMessage());
+                    return;
+                }
+                callbackContext.success();
+            }
+        });
+    }
+
+    private static int toActivityOrientation(String orientation) {
+        switch (orientation) {
+            case ANY:
+                return ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
+            case LANDSCAPE_PRIMARY:
+                return ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
+            case PORTRAIT_PRIMARY:
+                return ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
+            case LANDSCAPE:
+                return ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
+            case PORTRAIT:
+                return ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT;
+            case LANDSCAPE_SECONDARY:
+                return ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE;
+            case PORTRAIT_SECONDARY:
+                return ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT;
+            default:
+                return UNKNOWN_ORIENTATION;
+        }
+    }
+
+    private static void sendError(CallbackContext callbackContext, String name, String message) {
+        JSONObject error = new JSONObject();
+        try {
+            error.put("name", name);
+            error.put("message", message);
+        } catch (JSONException e) {
+            callbackContext.error(message);
+            return;
+        }
+        callbackContext.error(error);
     }
 }

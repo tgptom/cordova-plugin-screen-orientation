@@ -19,7 +19,7 @@
  *
  */
 
-/* global cordova, OrientationLockType */
+/* global cordova */
 
 var screenOrientation = {};
 if (!window.OrientationType) {
@@ -41,34 +41,63 @@ if (!window.OrientationLockType) {
         any: 15 // All orientations are supported (unlocked orientation)
     };
 }
-var orientationMask = 1;
+
+// Orientation values accepted by lock(), independent of any native OrientationLockType.
+var SUPPORTED_ORIENTATIONS = [
+    'portrait-primary',
+    'portrait-secondary',
+    'landscape-primary',
+    'landscape-secondary',
+    'portrait',
+    'landscape',
+    'any'
+];
+
+/**
+ * Requests the given orientation from the native side.
+ * The returned Promise settles only when the native callback is invoked:
+ * it resolves on native success and rejects on native error.
+ */
 screenOrientation.setOrientation = function (orientation) {
-    orientationMask = window.OrientationLockType[orientation];
-    cordova.exec(null, null, 'CDVOrientation', 'screenOrientation', [orientationMask, orientation]);
+    if (!isSupportedOrientation(orientation)) {
+        return Promise.reject(createError('NotSupportedError', 'Unsupported orientation value: ' + orientation));
+    }
+
+    return new Promise(function (resolve, reject) {
+        cordova.exec(function () {
+            resolve();
+        }, function (nativeError) {
+            reject(normalizeNativeError(nativeError, orientation));
+        }, 'CDVOrientation', 'screenOrientation', [orientation]);
+    });
 };
 
 screenOrientation.lock = function (orientation) {
-    var p = new Promise(function (resolve, reject) {
-        resolveOrientation(orientation, resolve, reject);
-    });
-    return p;
+    return screenOrientation.setOrientation(orientation);
 };
 
 screenOrientation.unlock = function () {
-    screenOrientation.setOrientation('any');
+    return screenOrientation.setOrientation('any');
 };
 
 setOrientationProperties();
 
-function resolveOrientation (orientation, resolve, reject) {
-    if (!Object.prototype.hasOwnProperty.call(OrientationLockType, orientation)) {
-        var err = new Error();
-        err.name = 'NotSupportedError';
-        reject(err); // "cannot change orientation");
-    } else {
-        screenOrientation.setOrientation(orientation);
-        resolve('Orientation set'); // orientation change successful
+function isSupportedOrientation (orientation) {
+    return typeof orientation === 'string' && SUPPORTED_ORIENTATIONS.indexOf(orientation) !== -1;
+}
+
+function createError (name, message) {
+    var err = new Error(message);
+    err.name = name;
+    return err;
+}
+
+function normalizeNativeError (nativeError, orientation) {
+    var fallbackMessage = 'Unable to set orientation: ' + orientation;
+    if (nativeError && typeof nativeError === 'object') {
+        return createError(nativeError.name || 'Error', nativeError.message || fallbackMessage);
     }
+    return createError('Error', nativeError || fallbackMessage);
 }
 
 var onChangeListener = null;

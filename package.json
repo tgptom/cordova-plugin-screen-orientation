@@ -1,11 +1,12 @@
 {
   "name": "cordova-plugin-screen-orientation",
-  "version": "3.0.5-dev",
+  "version": "4.0.0",
   "description": "Cordova Screen Orientation plugin",
   "repository": "github:apache/cordova-plugin-screen-orientation",
   "bugs": "https://github.com/apache/cordova-plugin-screen-orientation/issues",
   "scripts": {
-    "test": "npm run lint",
+    "test": "npm run lint && npm run test:unit",
+    "test:unit": "node --test tests/unit/*.test.js",
     "lint": "eslint ."
   },
   "cordova": {

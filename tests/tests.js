@@ -122,40 +122,52 @@ exports.defineAutoTests = function () {
     // test addEventListener('change') works
     // test onchange works
     describe('window.screen.orientation', function () {
+        it('should reject unsupported orientation values with NotSupportedError', function () {
+            return window.screen.orientation.lock('not-an-orientation').then(function () {
+                fail('lock() should not resolve for an unsupported orientation');
+            }, function (err) {
+                expect(err.name).toBe('NotSupportedError');
+            });
+        });
+
         if (isLockable) {
             it('should successfully lock and unlock screen orientation', function () {
                 return window.screen.orientation.lock('portrait').then(function () {
                     expect(window.screen.orientation.type).toMatch(/^portrait-/);
-                    expect(window.screen.orientation.unlock).not.toThrow();
+                    return window.screen.orientation.unlock();
                 });
             });
         }
-        // We do not test "not isLockable" states because it isn't testable.
-        // The error stating it's not supported is not actually passed to the
-        // promise reject function, so the error is not catchable. The error
-        // is only ever printed to the JS console if nothing catches errors.
-        // The promise itself is fulfilled successfully, despite the action
-        // not doing what is expected.
-        // I believe this might be a privacy security mechanism to avoid device
-        // fingerprinting.
+        // Locking is not tested on non-mobile devices because support for it
+        // depends on the platform and device.
     });
 };
+
 exports.defineManualTests = function (contentEl, createActionButton) {
     createActionButton('Listen to orientationchange events', function () {
         window.addEventListener('orientationchange', function () {
             contentEl.innerHTML += '<p>Orientation changed! ' + screen.orientation.type + '</p>';
         });
     });
+    function log (message) {
+        var p = document.createElement('p');
+        p.textContent = message;
+        contentEl.appendChild(p);
+    }
+    function report (promise, successMessage) {
+        promise.then(function () {
+            log(successMessage);
+        }, function (err) {
+            log('Error: ' + err.name + ' ' + err.message);
+        });
+    }
     createActionButton('Unlock orientation', function () {
-        screen.orientation.unlock();
-        contentEl.innerHTML += '<p>Orientation unlocked.</p>';
+        report(screen.orientation.unlock(), 'Orientation unlocked.');
     });
     createActionButton('Lock to portrait', function () {
-        screen.orientation.lock('portrait');
-        contentEl.innerHTML += '<p>Orientation locked to portrait.</p>';
+        report(screen.orientation.lock('portrait'), 'Orientation locked to portrait.');
     });
     createActionButton('Lock to landscape', function () {
-        screen.orientation.lock('landscape');
-        contentEl.innerHTML += '<p>Orientation locked to landscape.</p>';
+        report(screen.orientation.lock('landscape'), 'Orientation locked to landscape.');
     });
 };
